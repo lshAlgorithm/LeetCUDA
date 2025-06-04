@@ -32,9 +32,9 @@ __global__ void elementwise_add_f32_kernel(float *a, float *b, float *c,
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
 __global__ void elementwise_add_f32x4_kernel(float *a, float *b, float *c,
                                              int N) {
-  int idx = 4 * (blockIdx.x * blockDim.x + threadIdx.x);
+  int idx = 4 * (blockIdx.x * blockDim.x + threadIdx.x); // id need to be multiplied by element_number
   if (idx < N) {
-    float4 reg_a = FLOAT4(a[idx]);
+    float4 reg_a = FLOAT4(a[idx]); // 4 fp32 vector
     float4 reg_b = FLOAT4(b[idx]);
     float4 reg_c;
     reg_c.x = reg_a.x + reg_b.x;
@@ -51,7 +51,7 @@ __global__ void elementwise_add_f32x4_kernel(float *a, float *b, float *c,
 __global__ void elementwise_add_f16_kernel(half *a, half *b, half *c, int N) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < N)
-    c[idx] = __hadd(a[idx], b[idx]);
+    c[idx] = __hadd(a[idx], b[idx]); // half add: __hadd
 }
 
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
@@ -66,6 +66,20 @@ __global__ void elementwise_add_f16x2_kernel(half *a, half *b, half *c, int N) {
     HALF2(c[idx]) = reg_c;
   }
 }
+
+/*
+__global__ void elementwise_add_fp16x2_kernel(half *a, half *b, half *c, int N) {
+  int idx = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
+  if (idx < N) {
+    half2 aa = HALF2(a[idx]);
+    half2 bb = HALF2(b[idx]);
+    half2 cc;
+    cc.x = __hadd(aa.x, bb.x);
+    cc.y = __hadd(aa.y, bb,y);
+    HALF2(c[idx]) = cc;
+  }
+}
+*/
 
 __global__ void elementwise_add_f16x8_kernel(half *a, half *b, half *c, int N) {
   int idx = 8 * (blockIdx.x * blockDim.x + threadIdx.x);

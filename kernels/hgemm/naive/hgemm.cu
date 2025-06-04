@@ -36,6 +36,22 @@ __global__ void hgemm_naive_f16_kernel(half *a, half *b, half *c, int M, int N,
     c[m * N + n] = psum; // c[m,n]
   }
 }
+/*
+__global__ void hgemm_naive_fp16_kernel(half* a, half* b, half* c, int M, int N) {
+  int n = blockIdx.x * blockDim.x + threadIdx.x;
+  int m = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (m < M && n < N) {
+    half psum = .0;
+
+    #pragma unroll
+    for (int k = 0; k < K; k++) {
+      psum += a[m * K + k] * b[k * N + n]; // multiple mem access
+    }
+    c[m * N + n] = psum;
+  }
+}
+*/
 
 // HGEMM: Block Tile + K Tile, with smem
 // Block Tile (BM, BN) + K Tile (BK=32)
@@ -46,7 +62,7 @@ __global__ void hgemm_sliced_k_f16_kernel(half *a, half *b, half *c, int M,
                                           int N, int K) {
   // [1] Block Tile: 32x32的block处理c上一块32x32的元素计算
   // [2]     K Tile: 使用共享内存，并将K分块为BK大小的块
-  __shared__ half s_a[BM][BK], s_b[BK][BN];
+  __shared__ half s_a[BM][BK], s_b[BK][BN]; //shared among threads in a warp
 
   int bx = blockIdx.x;
   int by = blockIdx.y;
@@ -71,11 +87,13 @@ __global__ void hgemm_sliced_k_f16_kernel(half *a, half *b, half *c, int M,
   for (int bk = 0; bk < (K + BK - 1) / BK; ++bk) {
     int load_gmem_a_k = bk * BK + load_smem_a_k;
     int load_gmem_a_addr = load_gmem_a_m * K + load_gmem_a_k;
-    s_a[load_smem_a_m][load_smem_a_k] = a[load_gmem_a_addr];
+    s_a[load_smem_a_m][load_smem_a_k] = a[load_gmem_a_addr]; // load the data to smem
     int load_gmem_b_k = bk * BK + load_smem_b_k;
     int load_gmem_b_addr = load_gmem_b_k * N + load_gmem_b_n;
     s_b[load_smem_b_k][load_smem_b_n] = b[load_gmem_b_addr];
     __syncthreads();
+
+    // We now just need to focus on smem, instead of gmem
 #pragma unroll
     for (int k = 0; k < BK; ++k) {
       int comp_smem_a_m = load_smem_a_m;
